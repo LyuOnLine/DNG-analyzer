@@ -1,12 +1,16 @@
 [[source]]
-url = "https://pypi.org/simple"
-verify_ssl = true
+url = "http://pypi.doubanio.com/simple"
+verify_ssl = false
 name = "pypi"
 
 [dev-packages]
 
 [packages]
 construct = "*"
+fire = "*"
+qtconsole = "*"
+"pyqt5" = "==5.11.2"
+ipython = "*"
 
 [requires]
-python_version = "3.6"
+python_version = "3.7"

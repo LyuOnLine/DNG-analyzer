@@ -562,7 +562,7 @@ def subifd_offsets(tags):
 
 IFD = Struct(
     "_endian" / Computed(this._._endian),
-    "items" / Int16, 
+    "items" / Int16,
     "tags" / Array(this.items, Tag),
     "subifd_offsets" / Computed(subifd_offsets(this.tags)),
 )
@@ -574,6 +574,7 @@ def cal_endian(id):
         return DNG_ENDIAN_HE
     else:
         return DNG_ENDIAN_LE
+
 
 DNG = Struct(
     "id" / Bytes(4),
@@ -594,52 +595,121 @@ DNG = Struct(
                    Pointer(this.ifd0.subifd_offsets[3], IFD)),
 )
 
-class TAGParser(object):
-    def _translate(self,tag):
+################################################################
+# class factory for TAG parser
+################################################################
+
+
+class TAG(object):
+    def __init__(self, tag):
+        self.tag = tag
         self.enum = tag.enum
-        self.type = tag.type
         self.offset = tag._offset
         self.data = tag.data
         self.len = tag.length
 
-    def __init__(self,tag):
-        self._translate(tag)
+    @classmethod
+    def _register_for_enum(cls, enum):
+        return False
 
-    def _brief(self):
-        s = "%s : " %(self.enum)
-        if self.type == TagTypeEnum.byte or self.type == TagTypeEnum.word or self.type == TagTypeEnum.dword:
-            s += "".join("%d, " % v for v in self.data[:10])[:-2]
-            if self.len > 10:
-                s += "..."
-        elif self.type == TagTypeEnum.float or self.type == TagTypeEnum.double:
-            s += "".join("%f, " % v for v in self.data[:6])[:-2]
-            if self.len > 6:
-                s += "..."
-        elif self.type == TagTypeEnum.string or self.type == TagTypeEnum.undefined:
-            s += self.data.decode("ascii")[:30]
-            if self.len > 30:
-                s += "..."
-        elif self.type == TagTypeEnum.rational or self.type == TagTypeEnum.srational:
-            s += "".join("%.3f, " % (d.a / d.b) for d in self.data[:6])[:-2]
-            if self.len > 6:
-                s += "..."
-        return s
-    
-    def __str__(self):
-        return "%s : %s" %(self.enum, self.data)
-        
+    @classmethod
+    def _register_for_type(cls, data_type):
+        return False
+
+
+class TAGTypeByte(TAG):
+    @classmethod
+    def _register_for_type(cls, data_type):
+        return data_type == TagTypeEnum.byte
+
+    def __repr__(self):
+        return "".join("0x%02x, " % int(v) for v in self.tag.data)[:-2]
+
+
+class TAGTypeString(TAG):
+    @classmethod
+    def _register_for_type(cls, data_type):
+        return data_type == TagTypeEnum.string or data_type == TagTypeEnum.undefined
+
+    def __repr__(self):
+        return self.tag.data.decode("ascii")
+
+
+class TAGTypeInterger(TAG):
+    @classmethod
+    def _register_for_type(cls, data_type):
+        return data_type == TagTypeEnum.word or data_type == TagTypeEnum.dword
+
+    def __repr__(self):
+        return "".join("%d, " % int(v) for v in self.tag.data)[:-2]
+
+
+class TAGTypeFloat(TAG):
+    @classmethod
+    def _register_for_type(cls, data_type):
+        return data_type == TagTypeEnum.float or data_type == TagTypeEnum.double
+
+    def __repr__(self):
+        return "".join("%f, " % float(v) for v in self.tag.data)[:-2]
+
+
+class TAGTypeRational(TAG):
+    @classmethod
+    def _register_for_type(cls, data_type):
+        return data_type == TagTypeEnum.rational or data_type == TagTypeEnum.srational
+
+    def __repr__(self):
+        return "".join("%.3f, " % d for d in self.data)[:-2]
+
+    def __getattribute__(self, name):
+        if name == "data":
+            return [float(d.a) / float(d.b) for d in object.__getattribute__(self, "data")]
+        else:
+            return object.__getattribute__(self, name)
+
+
+class TAGEnumColorMatrix(TAG):
+    @classmethod
+    def _register_for_enum(cls, enum):
+        return enum == TAG_ENUM.color_matrix1 or enum == TAG_ENUM.color_matrix2
+
+    def __getattribute__(self, name):
+        if name == "data":
+            return [float(d.a) / float(d.b) for d in object.__getattribute__(self, "data")]
+        else:
+            return object.__getattribute__(self, name)
+
+
+def TagGenerator(tag):
+    for cls in TAG.__subclasses__():
+        if cls._register_for_enum(tag.enum):
+            return cls(tag)
+        if cls._register_for_type(tag.type):
+            return cls(tag)
+    raise Exception("TAG class not defined!")
+
 
 class IFDParser(object):
+    MAX_BRIEF_INFO_LEN = 120
     # translate construct object to dict
+
     def _translate(self, ifd):
-        self.dict = {}
-        self.tags = [TAGParser(t) for t in ifd.tags]
+        for t in ifd.tags:
+            setattr(self, str(t.enum), TagGenerator(t))
 
     def __init__(self, ifd):
         self._translate(ifd)
 
     def __str__(self):
-        return "TAGS:\n" + "".join("%s \n" % t._brief() for t in self.tags) 
+        s = "TAGS:\n"
+        for t in vars(self).values():
+            cur = "%s : %s" % (t.enum, t.__repr__())
+            if len(cur) < self.MAX_BRIEF_INFO_LEN:
+                s += cur
+            else:
+                s += cur[:cur[:self.MAX_BRIEF_INFO_LEN].rfind(",")] + "..."
+            s += "\n"
+        return s
 
 
 class DNGParser(object):
@@ -648,11 +718,11 @@ class DNGParser(object):
         self.ifd0 = IFDParser(self._dng.ifd0)
         self.subifds = []
         for i in range(3):
-            ifd = getattr(self._dng, "subifd%d"%(i))
+            ifd = getattr(self._dng, "subifd%d" % (i))
             if ifd == None:
                 break
             self.subifds.append(IFDParser(ifd))
-    
+
     def __str__(self):
         s = "================================================================\n"
         s += "[IFD0]\n"
@@ -665,4 +735,3 @@ class DNGParser(object):
             s += "================================================================\n"
             s += str(ifd)
         return s
-
