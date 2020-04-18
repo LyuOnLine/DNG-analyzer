@@ -3,6 +3,7 @@ DNG-analyzer
 DNG file metadata inspector and analyzer.
 - support subIFD structure.
 - parsing and readout all tag content.
+- inspect detail tag offset, value in interactive mode.
 
 ### usage:
 - Restore python virtual environment using pipenv:
@@ -10,6 +11,11 @@ DNG file metadata inspector and analyzer.
     ```
     pip3 install pipenv
     pipenv sync
+    ```
+  Install dependencies manually by following:
+    ```
+    sudo apt-get install ipython3-qtconsole
+    sudo pip3 install construct
     ```
 - Analyze dng file.
 
@@ -46,4 +52,16 @@ DNG file metadata inspector and analyzer.
     unique_camera_model : PENTAX K10D
     color_matrix1 : 2.323, -0.823, -0.318, -0.459, 1.231, 0.089... 
     color_matrix2 : 1.099, -0.257, -0.038, -0.569, 1.259, 0.250... 
+    ```
+- Show detail metadata in interactive mode:
+    - In interactive mode, IPython will be launched. 
+    - All metadta in dng can be viewed with IPython TAB Completion support.
+    ```
+    $pipenv run python test/test_dng_parser.py -i RAW_PENTAX_K10D_SRGB.DNG
+    dng analyzer started.
+        dng.ifd0.TAGNAME: show detail tag info of ifd0
+        dng.subifd0[0].TAGNAME: show detail tag info of subifds
+    
+    In [1]: dng.ifd0.color_matrix1                                                                                                                                                                                      
+    Out[1]: 2.323, -0.823, -0.318, -0.459, 1.231, 0.089, -0.086, 0.168, 0.391
     ```
