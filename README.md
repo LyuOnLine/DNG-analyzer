@@ -5,6 +5,8 @@ DNG file metadata inspector and analyzer.
 - parsing and readout all tag content.
 - inspect detail tag offset, value in interactive mode.
 
+![operation](docs/operation.svg)
+
 ### usage:
 - Restore python virtual environment using pipenv:
 
